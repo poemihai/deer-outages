@@ -57,9 +57,7 @@ class DeerOutageCalendar(DeerEntity, CalendarEntity):
     def event(self) -> CalendarEvent | None:
         """Return the outage going on now or the next one."""
         upcoming = self.coordinator.upcoming()
-        return (
-            match_event(upcoming[0], self.hass.config.language) if upcoming else None
-        )
+        return match_event(upcoming[0], self.hass.config.language) if upcoming else None
 
     async def async_get_events(
         self, hass: HomeAssistant, start_date: datetime, end_date: datetime

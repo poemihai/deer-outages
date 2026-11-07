@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
+from homeassistant.config_entries import SOURCE_RECONFIGURE, SOURCE_USER
+from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import (
     AiohttpClientMocker,
 )
-
-from homeassistant.config_entries import SOURCE_USER
-from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowResultType
 
 from custom_components.deer_outages.const import DOMAIN
 
@@ -36,7 +35,8 @@ async def test_user_flow(hass: HomeAssistant, feed: AiohttpClientMocker) -> None
     # The same address in Romanian is a duplicate.
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {**USER_INPUT, "locality": "Târgu Secuiesc", "streets": "ady endre, GABOR ARON"}
+        result["flow_id"],
+        {**USER_INPUT, "locality": "Târgu Secuiesc", "streets": "ady endre, GABOR ARON"},
     )
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "already_configured"
@@ -67,3 +67,54 @@ async def test_options_flow(
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options == {"streets": "Kossuth Lajos"}
     assert entry.title == "Kézdivásárhely – Kossuth Lajos"
+
+
+async def test_reconfigure_flow(
+    hass: HomeAssistant, feed: AiohttpClientMocker, entry: MockConfigEntry
+) -> None:
+    """The whole address can be changed and the entry is reloaded."""
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "reconfigure"
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        {"county": "Sibiu", "locality": "Sibiu", "streets": "Calea Dumbrăvii"},
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "reconfigure_successful"
+    await hass.async_block_till_done()
+    assert entry.data == {"county": "Sibiu", "locality": "Sibiu"}
+    assert entry.options == {"streets": "Calea Dumbrăvii"}
+    assert entry.title == "Sibiu – Calea Dumbrăvii"
+    assert entry.unique_id == "SIBIU|SIBIU|CALEA DUMBRAVII"
+
+
+async def test_reconfigure_duplicate(
+    hass: HomeAssistant, feed: AiohttpClientMocker, entry: MockConfigEntry
+) -> None:
+    """Reconfiguring to an address that already exists is refused."""
+    entry.add_to_hass(hass)
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    # A second entry follows the whole locality of Târgu Secuiesc.
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": SOURCE_USER})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"county": "Covasna", "locality": "Târgu Secuiesc", "streets": ""}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    await hass.async_block_till_done()
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_RECONFIGURE, "entry_id": entry.entry_id}
+    )
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"county": "Covasna", "locality": "Târgu Secuiesc", "streets": ""}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "already_configured"}

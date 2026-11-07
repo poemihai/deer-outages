@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from aiohttp import ClientError, ClientSession, ClientTimeout
-
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.loader import async_get_integration
@@ -40,9 +39,7 @@ class DeerApi:
             raise DeerApiError(f"Could not fetch {path}: {err}") from err
         if payload is None:
             return []
-        if not isinstance(payload, list) or not all(
-            isinstance(item, dict) for item in payload
-        ):
+        if not isinstance(payload, list) or not all(isinstance(item, dict) for item in payload):
             raise DeerApiError(f"Unexpected response from {path}")
         return payload
 
@@ -58,6 +55,4 @@ class DeerApi:
 async def async_create_api(hass: HomeAssistant) -> DeerApi:
     """Create a client identifying itself with only the integration version."""
     integration = await async_get_integration(hass, DOMAIN)
-    return DeerApi(
-        async_get_clientsession(hass), f"ha-deer-outages/{integration.version}"
-    )
+    return DeerApi(async_get_clientsession(hass), f"ha-deer-outages/{integration.version}")

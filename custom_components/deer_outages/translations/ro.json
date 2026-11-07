@@ -12,11 +12,24 @@
         "data_description": {
           "streets": "Exemplu: Gábor Áron, Ady Endre. Întreruperile care acoperă întreaga localitate sau o zonă sunt incluse mereu."
         }
+      },
+      "reconfigure": {
+        "title": "Modifică adresa",
+        "description": "Întreruperile programate și incidentele Distribuție Energie Electrică Romania (DEER) pentru o adresă. Localitatea poate fi scrisă în română sau în maghiară (de ex. Târgu Secuiesc sau Kézdivásárhely). Lasă străzile goale pentru întreaga localitate.",
+        "data": {
+          "county": "Județ",
+          "locality": "Localitate",
+          "streets": "Străzi (opțional, separate prin virgulă)"
+        },
+        "data_description": {
+          "streets": "Exemplu: Gábor Áron, Ady Endre. Întreruperile care acoperă întreaga localitate sau o zonă sunt incluse mereu."
+        }
       }
     },
     "error": {
       "cannot_connect": "Nu se poate accesa sursa de întreruperi DEER.",
-      "locality_required": "Introdu o localitate."
+      "locality_required": "Introdu o localitate.",
+      "already_configured": "Această adresă este deja configurată."
     },
     "abort": {
       "already_configured": "Această adresă este deja configurată."
@@ -40,11 +53,17 @@
     "sensor": {
       "next_outage": {
         "name": "Următoarea întrerupere"
+      },
+      "outage_end": {
+        "name": "Sfârșitul întreruperii curente"
       }
     },
     "binary_sensor": {
       "outage_now": {
         "name": "Întrerupere acum"
+      },
+      "area_only": {
+        "name": "Zonă afectată (fără stradă)"
       }
     },
     "calendar": {

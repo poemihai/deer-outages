@@ -12,11 +12,24 @@
         "data_description": {
           "streets": "Example: Gábor Áron, Ady Endre. Outages that cover the whole locality or a zone are always included."
         }
+      },
+      "reconfigure": {
+        "title": "Change the address",
+        "description": "Planned power outages and incidents of Distribuție Energie Electrică Romania (DEER) for one address. Type the locality in Romanian or in Hungarian (e.g. Târgu Secuiesc or Kézdivásárhely). Leave the streets empty to follow the whole locality.",
+        "data": {
+          "county": "County",
+          "locality": "Locality",
+          "streets": "Streets (optional, separated by commas)"
+        },
+        "data_description": {
+          "streets": "Example: Gábor Áron, Ady Endre. Outages that cover the whole locality or a zone are always included."
+        }
       }
     },
     "error": {
       "cannot_connect": "Could not reach the DEER outage feed.",
-      "locality_required": "Type a locality."
+      "locality_required": "Type a locality.",
+      "already_configured": "This address is already set up."
     },
     "abort": {
       "already_configured": "This address is already set up."
@@ -40,11 +53,17 @@
     "sensor": {
       "next_outage": {
         "name": "Next power outage"
+      },
+      "outage_end": {
+        "name": "Current outage end"
       }
     },
     "binary_sensor": {
       "outage_now": {
         "name": "Power outage now"
+      },
+      "area_only": {
+        "name": "Whole area affected"
       }
     },
     "calendar": {

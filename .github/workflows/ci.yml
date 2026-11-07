@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install ruff
+        run: pip install ruff
+      - name: Lint
+        run: ruff check custom_components tests
+      - name: Format
+        run: ruff format --check custom_components tests
+
+  hassfest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install hassfest
+        run: pip install hassfest
+      - name: Validate
+        run: hassfest
+
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install test requirements
+        run: pip install -r requirements_test.txt
+      - name: Run tests
+        run: python -m pytest -q --cov=custom_components.deer_outages --cov-report=term-missing --timeout=120

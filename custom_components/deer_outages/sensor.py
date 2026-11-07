@@ -19,7 +19,45 @@ async def async_setup_entry(
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
     """Set up the sensors."""
-    async_add_entities([DeerNextOutageSensor(entry.runtime_data)])
+    coordinator = entry.runtime_data
+    async_add_entities([DeerNextOutageSensor(coordinator), DeerOutageEndSensor(coordinator)])
+
+
+class DeerOutageEndSensor(DeerEntity, SensorEntity):
+    """When the current (or the next) outage at the address ends."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_icon = "mdi:clock-end"
+
+    def __init__(self, coordinator) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, "outage_end")
+
+    @property
+    def native_value(self) -> datetime | None:
+        """Return the end of the first outage that is not over."""
+        upcoming = self.coordinator.upcoming()
+        return upcoming[0].outage.end if upcoming else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return the details of the current or next outage."""
+        upcoming = self.coordinator.upcoming()
+        attributes: dict[str, Any] = {
+            "count": len(upcoming),
+            **self._common_attributes,
+        }
+        if upcoming:
+            first = upcoming[0]
+            attributes.update(
+                {
+                    "type": first.outage.kind,
+                    "end_known": first.outage.end_known,
+                    "addresses": [place.text for place in first.places],
+                    "message": outage_text(first, self.hass.config.language),
+                }
+            )
+        return attributes
 
 
 class DeerNextOutageSensor(DeerEntity, SensorEntity):

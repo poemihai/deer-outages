@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-import logging
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -14,7 +14,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .api import DeerApi, DeerApiError
+from .api import DeerApiError
 from .const import (
     CONF_COUNTY,
     CONF_LOCALITY,
@@ -24,11 +24,13 @@ from .const import (
     EVENT_NEW_OUTAGE,
     FEED_TIME_ZONE,
     INCIDENT_DEFAULT_DURATION,
+    INCIDENT_ONGOING_EXTENSION,
     MAX_DATA_AGE,
     SCAN_INTERVAL,
     SEEN_RETENTION_DAYS,
     STORAGE_VERSION,
 )
+from .feed import FeedCache
 from .outages import (
     TYPE_INCIDENT,
     Outage,
@@ -65,6 +67,8 @@ class Match:
             "id": outage.work_id,
             "start": outage.start.isoformat(),
             "end": outage.end.isoformat(),
+            "start_utc": dt_util.as_utc(outage.start).isoformat(),
+            "end_utc": dt_util.as_utc(outage.end).isoformat(),
             "end_known": outage.end_known,
             "duration": outage.duration,
             "addresses": [place.text for place in self.places],
@@ -82,7 +86,7 @@ class DeerCoordinator(DataUpdateCoordinator[list[Match]]):
 
     config_entry: DeerConfigEntry
 
-    def __init__(self, hass: HomeAssistant, entry: DeerConfigEntry, api: DeerApi) -> None:
+    def __init__(self, hass: HomeAssistant, entry: DeerConfigEntry, feed: FeedCache) -> None:
         """Initialize the coordinator."""
         super().__init__(
             hass,
@@ -91,7 +95,7 @@ class DeerCoordinator(DataUpdateCoordinator[list[Match]]):
             name=f"{DOMAIN} {entry.title}",
             update_interval=SCAN_INTERVAL,
         )
-        self._api = api
+        self._feed = feed
         self.county: str = entry.data[CONF_COUNTY]
         self.region: str = COUNTIES[self.county][0]
         self.locality: str = entry.data[CONF_LOCALITY]
@@ -103,6 +107,7 @@ class DeerCoordinator(DataUpdateCoordinator[list[Match]]):
         # Outage key to the date it was last in the feed. None until a baseline exists.
         self._seen: dict[str, str] | None = None
         self._last_good_update: datetime | None = None
+        self._degraded = False
         self._unsub_boundary: CALLBACK_TYPE | None = None
 
     @property
@@ -114,15 +119,37 @@ class DeerCoordinator(DataUpdateCoordinator[list[Match]]):
             and dt_util.utcnow() - self._last_good_update <= MAX_DATA_AGE
         )
 
+    @property
+    def stale(self) -> bool:
+        """Return if the shown data is older than the last successful fetch."""
+        return not self.last_update_success or self._degraded
+
+    @property
+    def seen_count(self) -> int:
+        """Return how many outages are remembered as already announced."""
+        return len(self._seen or {})
+
+    def _effective_end(self, outage: Outage, now: datetime) -> datetime:
+        """Return the end used for state logic.
+
+        An incident without an end time in the feed counts as ongoing until
+        the next poll, so it does not turn off between two fetches.
+        """
+        if outage.kind == TYPE_INCIDENT and not outage.end_known:
+            return max(outage.end, now + INCIDENT_ONGOING_EXTENSION)
+        return outage.end
+
     def current(self, now: datetime | None = None) -> list[Match]:
         """Return the matches going on now."""
         now = now or dt_util.now()
-        return [m for m in self.data or [] if m.outage.start <= now < m.outage.end]
+        return [
+            m for m in self.data or [] if m.outage.start <= now < self._effective_end(m.outage, now)
+        ]
 
     def upcoming(self, now: datetime | None = None) -> list[Match]:
         """Return the matches not over yet, current ones first."""
         now = now or dt_util.now()
-        return [m for m in self.data or [] if m.outage.end > now]
+        return [m for m in self.data or [] if self._effective_end(m.outage, now) > now]
 
     async def _async_setup(self) -> None:
         stored = await self._store.async_load()
@@ -131,13 +158,22 @@ class DeerCoordinator(DataUpdateCoordinator[list[Match]]):
 
     async def _async_update_data(self) -> list[Match]:
         try:
-            scheduled = await self._api.async_get_scheduled(self.region)
-            incidents = await self._api.async_get_incidents(self.region)
+            feed_result = await self._feed.async_get(self.region)
         except DeerApiError as err:
             if not self.has_usable_data:
                 self.async_update_listeners()
             raise UpdateFailed(str(err)) from err
-        self._last_good_update = dt_util.utcnow()
+
+        scheduled, incidents = feed_result.scheduled, feed_result.incidents
+        if scheduled is None or incidents is None:
+            # One endpoint is down and there is nothing cached for it yet.
+            if not self.has_usable_data:
+                self.async_update_listeners()
+            raise UpdateFailed(f"Feed for {self.region} partially unavailable, no cached data")
+
+        if not feed_result.degraded:
+            self._last_good_update = dt_util.utcnow()
+        self._degraded = feed_result.degraded
 
         outages = parse_planned(scheduled, self._tz) + parse_incidents(
             incidents, self._tz, INCIDENT_DEFAULT_DURATION
@@ -147,7 +183,8 @@ class DeerCoordinator(DataUpdateCoordinator[list[Match]]):
             for outage, places in select(outages, self.county, self.locality, self.streets)
         ]
         matches.sort(key=lambda m: (m.outage.start, m.outage.key))
-        await self._async_announce_new(matches)
+        if not feed_result.degraded:
+            await self._async_announce_new(matches)
         self._schedule_boundary(matches)
         return matches
 
@@ -186,7 +223,7 @@ class DeerCoordinator(DataUpdateCoordinator[list[Match]]):
         times = [
             moment
             for m in matches
-            for moment in (m.outage.start, m.outage.end)
+            for moment in (m.outage.start, self._effective_end(m.outage, now))
             if moment > now
         ]
         if not times:
@@ -228,4 +265,3 @@ def outage_text(match: Match, language: str | None) -> str:
     if len(match.places) > 5:
         places += f" (+{len(match.places) - 5})"
     return f"{kind} {when}: {places}"
-

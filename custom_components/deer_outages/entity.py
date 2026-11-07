@@ -42,5 +42,5 @@ class DeerEntity(CoordinatorEntity[DeerCoordinator]):
             "county": self.coordinator.county,
             "locality": self.coordinator.locality,
             "streets": self.coordinator.streets,
-            "stale": not self.coordinator.last_update_success,
+            "stale": self.coordinator.stale,
         }

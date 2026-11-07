@@ -5,17 +5,26 @@ Kept free of Home Assistant objects so it is easy to test.
 
 from __future__ import annotations
 
+import re
+import unicodedata
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, tzinfo
-import re
 from typing import Any
-import unicodedata
 
 TYPE_PLANNED = "planned"
 TYPE_INCIDENT = "incident"
 
 _ABBREVIATIONS = {"TG": "TARGU", "SF": "SFANTU", "SFT": "SFANTU", "STR": "STRADA"}
-_STREET_WORDS = {"STRADA", "STRADA:", "ALEEA", "BULEVARDUL", "BD", "CALEA", "PIATA"}
+_STREET_WORDS = {
+    "STRADA",
+    "STRADA:",
+    "ALEEA",
+    "BULEVARDUL",
+    "BD",
+    "CALEA",
+    "CALE",
+    "PIATA",
+}
 # Markers in a planned outage address that it covers more than single streets.
 _AREA_MARKERS = ("LOCALITATE", "SAT", "ZONA", "PT")
 _BR = re.compile(r"<br\s*/?>", re.IGNORECASE)
@@ -88,8 +97,10 @@ class Place:
     def is_area(self) -> bool:
         """Return if the line covers a whole locality, village or zone."""
         words = normalize(self.detail).split()
-        return not words or words[0] in _AREA_MARKERS or (
-            not any(word in _STREET_WORDS for word in words)
+        return (
+            not words
+            or words[0] in _AREA_MARKERS
+            or (not any(word in _STREET_WORDS for word in words))
         )
 
 
@@ -137,14 +148,24 @@ def _county_of(record: dict[str, Any]) -> str:
     return county
 
 
+def _is_address_marker(value: str) -> bool:
+    """Return if a village candidate is really a street or an area marker."""
+    words = normalize(value).split()
+    return not words or words[0] in _STREET_WORDS or words[0] in _AREA_MARKERS
+
+
 def _split_planned(text: str) -> Place:
     """Split "LOCALITY, rest" from a planned outage."""
     locality, _, detail = text.partition(",")
     detail = detail.strip()
-    # "LIVEZILE, IZVOARELE(LIVEZILE), Sat ..." names the village before the "(".
-    village = re.match(r"^([^,(]+)\([^)]*\)\s*,", detail)
+    # "LIVEZILE, IZVOARELE(LIVEZILE), Sat ..." names the village before the
+    # "(" and "ARIESENI, CASA DE PIATRA, Strada ..." after a plain comma.
+    village = re.match(r"^([^,(]+)\([^)]*\)\s*,", detail) or re.match(r"^([^,]+),", detail)
+    if village and _is_address_marker(village.group(1)):
+        village = None
     if village:
         locality = f"{locality} {village.group(1)}"
+        detail = detail[village.end() :].strip(" ,")
     return Place(locality=locality.strip(), detail=detail, text=" ".join(text.split()))
 
 
@@ -155,9 +176,7 @@ def _split_incident(text: str) -> Place:
         name, sep, value = chunk.partition(":")
         if sep:
             parts[normalize(name)] = value.strip()
-    locality = " ".join(
-        value for value in (parts.get("LOC"), parts.get("SAT")) if value
-    )
+    locality = " ".join(value for value in (parts.get("LOC"), parts.get("SAT")) if value)
     street = parts.get("STRADA") or ""
     detail = f"Strada {street}" if street else ""
     if number := parts.get("NR"):

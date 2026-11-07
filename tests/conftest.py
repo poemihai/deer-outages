@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import (
     AiohttpClientMocker,
@@ -53,3 +55,12 @@ def entry() -> MockConfigEntry:
         data={CONF_COUNTY: "Covasna", CONF_LOCALITY: "Kézdivásárhely"},
         options={CONF_STREETS: "Gábor Áron"},
     )
+
+
+def entity_id_by_key(hass: HomeAssistant, entry: MockConfigEntry, key: str) -> str:
+    """Return the entity id of the entry's entity with the given key."""
+    wanted = f"{entry.entry_id}_{key}"
+    for entity_id, entity in er.async_get(hass).entities.items():
+        if entity.unique_id == wanted:
+            return entity_id
+    raise AssertionError(f"No entity with unique id {wanted}")

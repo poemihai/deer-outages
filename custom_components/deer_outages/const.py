@@ -16,6 +16,9 @@ MAX_DATA_AGE: Final = timedelta(hours=3)
 FEED_TIME_ZONE: Final = "Europe/Bucharest"
 # Incidents often have no end time yet; assume this long until they get one.
 INCIDENT_DEFAULT_DURATION: Final = timedelta(hours=2)
+# An incident without an end time stays "ongoing" this long past the poll,
+# so the sensors do not turn off between two fetches while it is in the feed.
+INCIDENT_ONGOING_EXTENSION: Final = SCAN_INTERVAL
 
 CONF_COUNTY: Final = "county"
 CONF_LOCALITY: Final = "locality"
