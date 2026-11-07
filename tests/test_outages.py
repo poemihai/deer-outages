@@ -56,7 +56,7 @@ def test_parse_planned() -> None:
     assert not work.places[0].is_area
 
     village = next(o for o in planned if o.work_id == "45684")
-    assert village.places[0].locality == "LIVEZILE IZVOARELE"
+    assert village.places[0].localities == ["LIVEZILE", "IZVOARELE"]
     assert village.places[0].is_area
     zone = next(o for o in planned if o.work_id == "50003")
     assert zone.places[0].is_area
@@ -161,3 +161,17 @@ def test_select_street_words() -> None:
 def test_select_other_county() -> None:
     """The county has to match too."""
     assert select(_all(), "Harghita", "Targu Secuiesc", []) == []
+
+
+def test_village_names() -> None:
+    """A village is found in the middle of the address, a street name is not a town."""
+    records = [
+        {"id": "1", "judet": "Buzau", "ansambluFunctional": "POGOANELE, VALEA SALCIILOR, Strada  PRINCIPALA",
+         "dataProgramareStart": "07/11/2026 09:00", "dataProgramareStop": "07/11/2026 12:00"},
+        {"id": "2", "judet": "Buzau", "ansambluFunctional": "BUZAU, Strada  VALEA SALCIILOR",
+         "dataProgramareStart": "07/11/2026 09:00", "dataProgramareStop": "07/11/2026 12:00"},
+    ]
+    outages = parse_planned(records, TZ)
+    assert [o.work_id for o, _ in select(outages, "Buzau", "Valea Sălciilor", [])] == ["1"]
+    assert [o.work_id for o, _ in select(outages, "Buzau", "Pogoanele", [])] == ["1"]
+    assert [o.work_id for o, _ in select(outages, "Buzau", "Pogoanele", ["Principala"])] == ["1"]
