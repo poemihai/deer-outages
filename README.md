@@ -17,7 +17,7 @@ Nem kell hozzá se fiók, se jelszó. A DEER nyilvános adatait olvassa, ugyanaz
 **HACS-szal (ajánlott)**
 
 1. HACS → jobb felül a három pont → **Egyéni tárolók** (Custom repositories).
-2. Tároló: `https://github.com/lehel67/deer-outages`, típus: **Integráció**.
+2. Tároló: `https://github.com/poemihai/deer-outages`, típus: **Integráció**.
 3. Keresd meg a „DEER” integrációt, **Letöltés**, majd indítsd újra a Home Assistantot.
 
 **Kézzel:** másold a `custom_components/deer_outages` mappát a Home Assistant `config/custom_components/` mappájába, és indítsd újra.
@@ -81,7 +81,7 @@ Nu e nevoie de cont sau parolă. Citește datele publice afișate pe [pagina de 
 **Cu HACS (recomandat)**
 
 1. HACS → cele trei puncte din dreapta-sus → **Repozitorii personalizate** (Custom repositories).
-2. Repozitoriu: `https://github.com/lehel67/deer-outages`, tip: **Integrare**.
+2. Repozitoriu: `https://github.com/poemihai/deer-outages`, tip: **Integrare**.
 3. Caută integrarea „DEER”, **Descarcă**, apoi repornește Home Assistant.
 
 **Manual:** copiază folderul `custom_components/deer_outages` în `config/custom_components/` din Home Assistant și repornește.
@@ -145,7 +145,7 @@ No account or password needed. It reads the public data shown on the [DEER outag
 **With HACS (recommended)**
 
 1. HACS → the three dots in the top right → **Custom repositories**.
-2. Repository: `https://github.com/lehel67/deer-outages`, type: **Integration**.
+2. Repository: `https://github.com/poemihai/deer-outages`, type: **Integration**.
 3. Find the „DEER” integration, **Download**, then restart Home Assistant.
 
 **Manually:** copy the `custom_components/deer_outages` folder into `config/custom_components/` of Home Assistant and restart.
