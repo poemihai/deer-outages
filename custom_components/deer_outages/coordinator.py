@@ -129,27 +129,27 @@ class DeerCoordinator(DataUpdateCoordinator[list[Match]]):
         """Return how many outages are remembered as already announced."""
         return len(self._seen or {})
 
-    def _effective_end(self, outage: Outage, now: datetime) -> datetime:
-        """Return the end used for state logic.
-
-        An incident without an end time in the feed counts as ongoing until
-        the next poll, so it does not turn off between two fetches.
-        """
+    def effective_end(self, outage: Outage, now: datetime) -> datetime:
+        """Return the end used for active and remaining-time calculations."""
         if outage.kind == TYPE_INCIDENT and not outage.end_known:
             return max(outage.end, now + INCIDENT_ONGOING_EXTENSION)
         return outage.end
+
+    def _effective_end(self, outage: Outage, now: datetime) -> datetime:
+        """Backward-compatible alias for the effective end calculation."""
+        return self.effective_end(outage, now)
 
     def current(self, now: datetime | None = None) -> list[Match]:
         """Return the matches going on now."""
         now = now or dt_util.now()
         return [
-            m for m in self.data or [] if m.outage.start <= now < self._effective_end(m.outage, now)
+            m for m in self.data or [] if m.outage.start <= now < self.effective_end(m.outage, now)
         ]
 
     def upcoming(self, now: datetime | None = None) -> list[Match]:
         """Return the matches not over yet, current ones first."""
         now = now or dt_util.now()
-        return [m for m in self.data or [] if self._effective_end(m.outage, now) > now]
+        return [m for m in self.data or [] if self.effective_end(m.outage, now) > now]
 
     async def _async_setup(self) -> None:
         stored = await self._store.async_load()
@@ -223,7 +223,7 @@ class DeerCoordinator(DataUpdateCoordinator[list[Match]]):
         times = [
             moment
             for m in matches
-            for moment in (m.outage.start, self._effective_end(m.outage, now))
+            for moment in (m.outage.start, self.effective_end(m.outage, now))
             if moment > now
         ]
         if not times:

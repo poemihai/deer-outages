@@ -65,6 +65,7 @@ async def test_entities(
     assert state.attributes["addresses"] == ["TARGU SECUIESC, Strada GABOR ARON"]
 
     state = hass.states.get(end_id)
+    assert state is not None
     assert dt_util.parse_datetime(state.state) == _at("2026-11-06 14:00")
     assert state.attributes["end_known"] is True
 
@@ -259,3 +260,46 @@ async def test_diagnostics(
     assert result["stale"] is False
     assert result["has_usable_data"] is True
     assert len(result["outages"]) == 3
+
+
+async def test_current_incident_end_before_future_outage(
+    hass: HomeAssistant,
+    feed: AiohttpClientMocker,
+    entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """The current sensor reports an active incident's end, not a future outage."""
+    feed.clear_requests()
+    feed.get(
+        SCHEDULED_URL,
+        json=[
+            {
+                "id": "future",
+                "judet": "COVASNA",
+                "ansambluFunctional": "TARGU SECUIESC, Strada GABOR ARON",
+                "dataProgramareStart": "23/11/2026 10:00",
+                "dataProgramareStop": "23/11/2026 14:00",
+            }
+        ],
+    )
+    feed.get(
+        INCIDENTS_URL,
+        json=[
+            {
+                "id": "81796",
+                "judet": "COVASNA",
+                "adresa": "Loc: TARGU SECUIESC, Strada: GABOR ARON",
+                "dataStart": "20/11/2026 10:23",
+                "dataStop": "20/11/2026 15:00",
+            }
+        ],
+    )
+    freezer.move_to(_at("2026-11-20 12:00"))
+    await _setup(hass, entry)
+
+    end_id = entity_id_by_key(hass, entry, "outage_end")
+    state = hass.states.get(end_id)
+    assert state is not None
+    assert dt_util.parse_datetime(state.state) == _at("2026-11-20 15:00")
+    assert state.attributes["type"] == "incident"
+    assert state.attributes["end_known"] is True

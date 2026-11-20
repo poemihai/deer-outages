@@ -8,6 +8,7 @@ from typing import Any
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
+from homeassistant.util import dt as dt_util
 
 from .coordinator import DeerConfigEntry, outage_text
 from .entity import DeerEntity
@@ -35,20 +36,25 @@ class DeerOutageEndSensor(DeerEntity, SensorEntity):
 
     @property
     def native_value(self) -> datetime | None:
-        """Return the end of the first outage that is not over."""
-        upcoming = self.coordinator.upcoming()
-        return upcoming[0].outage.end if upcoming else None
+        """Return the end from the active or next outage."""
+        now = dt_util.now()
+        current = self.coordinator.current(now)
+        upcoming = self.coordinator.upcoming(now)
+        first = current[0] if current else (upcoming[0] if upcoming else None)
+        return first.outage.end if first else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Return the details of the current or next outage."""
-        upcoming = self.coordinator.upcoming()
+        now = dt_util.now()
+        current = self.coordinator.current(now)
+        upcoming = self.coordinator.upcoming(now)
+        first = current[0] if current else (upcoming[0] if upcoming else None)
         attributes: dict[str, Any] = {
-            "count": len(upcoming),
+            "count": len(current if current else upcoming),
             **self._common_attributes,
         }
-        if upcoming:
-            first = upcoming[0]
+        if first:
             attributes.update(
                 {
                     "type": first.outage.kind,
