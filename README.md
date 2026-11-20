@@ -1,4 +1,15 @@
 # DEER power outages – Home Assistant
+### ⚠️ Important Migration Notes (Breaking Changes)
+
+If you have existing automations built on earlier versions of this integration, please take note of the following behavior changes:
+
+1. **`current_outage_end` sensor behavior**:
+   * **Previously:** This sensor only held a timestamp during an active outage (remaining `unknown` otherwise).
+   * **Now:** It displays the end time of the active outage or, **if none is active, the end time of the next scheduled outage**. Automations that rely on this sensor changing from `unknown` to a valid date to detect an active outage will trigger prematurely as soon as a future outage is announced.
+2. **Detecting an active outage**:
+   * To trigger actions strictly when power goes out or comes back, use the dedicated **`binary_sensor.…_power_outage_now`** entity, which switches to `on` at the exact start time and back to `off` when the outage ends.
+3. **New events for updates and cancellations**:
+   * Alongside `deer_outages_new_outage`, the integration now fires **`deer_outages_updated`** (when an outage is rescheduled) and **`deer_outages_cancelled`** (when an outage is removed). Update your notification and preventive automations to listen to these events as well (e.g., to revert preventive actions if an outage is cancelled).
 
 [Magyar](#magyar) | [Română](#română) | [English](#english)
 
