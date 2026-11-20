@@ -6,7 +6,7 @@
 
 ## Magyar
 
-A **Distribuție Energie Electrică Romania (DEER)** tervezett áramszünetei és üzemzavarai a Home Assistantban, **a saját címedre szűrve**. Szól, ha holnap nem lesz áram az utcádban, a naptárban mutatja a leállásokat, és a leállás kezdetekor és végén pontosan vált.
+A **Distribuție Energia Electrică Romania (DEER)** tervezett áramszünetei és üzemzavarai a Home Assistantban, **a saját címedre szűrve**. Szól, ha holnap nem lesz áram az utcádban, a naptárban mutatja a leállásokat, és a leállás kezdetekor és végén pontosan vált.
 
 Nem kell hozzá se fiók, se jelszó. A DEER nyilvános adatait olvassa, ugyanazt, amit a [DEER áramszünet-oldala](https://www.distributie-energie.ro/intreruperi-deer/) mutat.
 
@@ -36,12 +36,12 @@ Több címet is felvehetsz (például a szüleidét). A címet (megye, települ�
 | Entitás | Mit mutat |
 | --- | --- |
 | `binary_sensor.…_aramszunet_most` | Be van kapcsolva, amíg leállás tart a címeden (tervezett vagy üzemzavar). Pontosan a kezdéskor és a befejezéskor vált. |
-| `sensor.…_kovetkezo_aramszunet` | A következő (vagy a mostani) leállás kezdete. Tulajdonságai: `end`, `type`, `addresses`, `message` (kész szöveg értesítéshez), `count`, `outages`. |
-| `sensor.…_aramszunet_vege` | A mostani (vagy a következő) leállás vége. Tulajdonságai: `type`, `end_known`, `addresses`, `message`, `count`. |
+| `sensor.…_kovetkezo_aramszunet` | A legközelebbi, szigorúan jövőbeni leállás kezdete. Tulajdonságai: `end`, `start_utc`, `end_utc`, `end_known`, `type`, `addresses`, `message`, `count`, `outages`. |
+| `sensor.…_sfarsitul_intreruperii_curente` | Sfârșitul incidentului activ vagy, în lipsa acestuia, sfârșitul următoarei întreruperi. Atribute: `type`, `end_known`, `ongoing`, `reported_end`, `estimated_end`, `addresses`, `message`, `count`. |
 | `binary_sensor.…_korzet_erintett` | Be van kapcsolva, ha a DEER a mostani vagy következő leállásnál csak egy egész települést/körzetet jelölt meg (nem derül ki, hogy a te utcád benne van-e). |
 | `calendar.…_aramszunetek` | Minden leállás eseményként, az érintett címekkel. |
 
-Új leállásnál a Home Assistant egy `deer_outages_new_outage` eseményt küld. Az első lekérdezésnél és újraindítás után nem jelzi újra a már ismert leállásokat.
+Új leállásnál a Home Assistant `deer_outages_new_outage`, megváltozott leállásnál `deer_outages_updated`, törölt vagy eltűnt leállásnál pedig `deer_outages_cancelled` eseményt küld. Az első lekérdezés és az újraindítás alapállapotot rögzít; a már ismert leállásokat nem jelzi újra.
 
 **Jó tudni:**
 
@@ -64,7 +64,7 @@ actions:
       message: "{{ trigger.event.data.message }}"
 ```
 
-Az esemény adatai: `message`, `type` (`planned` / `incident`), `start`, `end`, `start_utc`, `end_utc`, `end_known`, `addresses`, `area_only`, `county`, `locality`, `streets`. A `start`/`end` romániai időben van, a `start_utc`/`end_utc` UTC-ben.
+Az esemény adatai: `message`, `type` (`planned` / `incident`), `start`, `end`, `start_utc`, `end_utc`, `end_known`, `addresses`, `area_only`, `match_confidence` (`exact_street` / `whole_area` / `locality`), `previous` (updated/cancelled eseményeknél), `county`, `locality`, `streets`. A `start`/`end` romániai időben van, a `start_utc`/`end_utc` UTC-ben.
 
 ---
 
@@ -90,7 +90,7 @@ Nu e nevoie de cont sau parolă. Citește datele publice afișate pe [pagina de 
 
 **Setări → Dispozitive și servicii → Adaugă integrare → DEER**
 
-- **Județ**, **localitate**: poți scrie localitatea în română sau maghiară (`Târgu Secuiesc` sau `Kézdivásárhely`, `Sfântu Gheorghe` sau `Sepsiszentgyörgy`). Diacriticele și literele mari/mici nu contează.
+- **Județ**, **localitate**: poți scrie localitatea în română sau maghiară (`Târgu Secuiesc` sau `Kézdivásárhely`, `Sfântu Gheorghe` sau `Sepsiszentgyörgy`). Diacriticele és literele mari/mici nu contează.
 - **Străzi** (opțional): separate prin virgulă, de exemplu `Gábor Áron, Ady Endre`. Dacă le lași goale, urmărești întreruperile din toată localitatea.
 
 Poți adăuga mai multe adrese (de exemplu a părinților). Adresa completă (județ, localitate, străzi) se poate modifica ulterior din pictograma cu rotiță (**Reconfigure**).
@@ -99,20 +99,20 @@ Poți adăuga mai multe adrese (de exemplu a părinților). Adresa completă (ju
 
 | Entitate | Ce arată |
 | --- | --- |
-| `binary_sensor.…_intrerupere_acum` | Pornit cât timp există o întrerupere la adresa ta (programată sau incident). Comută exact la început și la sfârșit. |
-| `sensor.…_urmatoarea_intrerupere` | Începutul următoarei (sau actualei) întreruperi. Atribute: `end`, `type`, `addresses`, `message`, `count`, `outages`. |
-| `sensor.…_sfarsitul_intreruperii_curente` | Sfârșitul întreruperii curente (sau al următoarei). Atribute: `type`, `end_known`, `addresses`, `message`, `count`. |
-| `binary_sensor.…_zona_afectata` | Pornit când DEER a anunțat doar o localitate/zonă întreagă la întreruperea curentă sau următoare (nu se știe dacă strada ta e inclusă). |
-| `calendar.…_intreruperi_curent` | Toate întreruperile ca evenimente, cu adresele afectate. |
+| `binary_sensor.…_intrerupere_acum` | Pornit cât timp există o întrerupere la adresa ta (programată sau incident). Comută exact la începutul și sfârșitul unei întreruperi. |
+| `sensor.…_urmatoarea_intrerupere` | Începutul următoarei întreruperi, strict în viitor. Atribute: `end`, `start_utc`, `end_utc`, `end_known`, `type`, `addresses`, `message`, `count`, `outages`. |
+| `sensor.…_sfarsitul_intreruperii_curente` | Sfârșitul incidentului activ sau, în lipsa acestuia, sfârșitul următoarei întreruperi. Atribute: `type`, `end_known`, `ongoing`, `reported_end`, `estimated_end`, `addresses`, `message`, `count`. |
+| `binary_sensor.…_zona_afectata` | Pornit dacă DEER a marcat o întreagă zonă/localitate pentru întrerupere (nu se știe dacă strada ta este inclusă). |
+| `calendar.…_intreruperi` | Toate întreruperile ca evenimente, cu adresele afectate. |
 
-La o întrerupere nouă, Home Assistant trimite evenimentul `deer_outages_new_outage`. Întreruperile deja anunțate nu sunt re-anunțate la prima interogare sau după repornire.
+La o nouă întrerupere, Home Assistant trimite un eveniment `deer_outages_new_outage`; pentru o întrerupere modificată, trimite `deer_outages_updated`; iar pentru o întrerupere anulată sau dispărută, trimite `deer_outages_cancelled`. Prima interogare și repornirea salvează starea inițială; întreruperile deja cunoscute nu sunt raportate din nou.
 
-**Bine de știut:**
+**De știut:**
 
-- Dacă DEER anunță o întrerupere pentru un sat sau o zonă întreagă (ex. `ZONA PT 7`), nu se știe dacă strada ta e inclusă. Din precauție, este afișată mereu, cu `area_only: true`.
-- Poți configura fie comuna, fie satul: întreruperile anunțate ca „Comuna, Satul, Strada” sunt găsite în ambele cazuri.
-- Incidentele adesea nu au încă oră de final. Până o primești, se presupune 2 ore; cât timp incidentul rămâne în feed, senzorii îl arată ca în desfășurare.
-- Reîmprospătare la 30 de minute. Dacă pagina DEER e indisponibilă, ultimele date bune sunt afișate până la 3 ore (`stale: true`).
+- Dacă DEER raportează o întrerupere pentru o întreagă localitate (ex. `ZONA PT 7`), nu se știe dacă strada ta este inclusă. Acestea sunt întotdeauna afișate pentru precauție, având `area_only: true`.
+- Poți seta localitatea ca și comună sau sat: întreruperile raportate în formatul „Comuna, Sat, Stradă” vor fi găsite în ambele cazuri.
+- Incidentele nu au întotdeauna o oră de sfârșit definită. În acest caz, se presupune o durată de 2 ore, până când DEER furnizează informațiile; cât timp incidentul este prezent în feed, senzorii vor arăta că este în curs de desfășurare.
+- Se actualizează la fiecare 30 de minute. Dacă pagina DEER nu este disponibilă, va afișa ultima dată bună timp de maximum 3 ore (`stale: true`).
 
 ### Exemplu de notificare
 
@@ -122,21 +122,21 @@ triggers:
   - trigger: event
     event_type: deer_outages_new_outage
 actions:
-  - action: notify.mobile_app_telefonul_meu
+  - action: notify.mobile_app_telefonom
     data:
       title: ⚡ Întrerupere curent
       message: "{{ trigger.event.data.message }}"
 ```
 
-Datele evenimentului: `message`, `type` (`planned` / `incident`), `start`, `end`, `start_utc`, `end_utc`, `end_known`, `addresses`, `area_only`, `county`, `locality`, `streets`. `start`/`end` sunt în ora României, `start_utc`/`end_utc` în UTC.
+Datele evenimentului: `message`, `type` (`planned` / `incident`), `start`, `end`, `start_utc`, `end_utc`, `end_known`, `addresses`, `area_only`, `match_confidence` (`exact_street` / `whole_area` / `locality`), `previous` (pentru evenimente actualizate/anulate), `county`, `locality`, `streets`. `start`/`end` sunt în ora României, iar `start_utc`/`end_utc` sunt în UTC.
 
 ---
 
 ## English
 
-Planned power outages and incidents of **Distribuție Energie Electrică Romania (DEER)** in Home Assistant, **filtered for your address**: it warns you when your street will have no power tomorrow, shows the outages in the calendar, and switches exactly when an outage starts and ends.
+The planned and unplanned power outages from **Distribuție Energie Electrică Romania (DEER)** in Home Assistant, **filtered to your address**: get notified when there is a power outage on your street, see the outages in the calendar, exactly at the start and end of an outage.
 
-No account or password needed. It reads the public data shown on the [DEER outage page](https://www.distributie-energie.ro/intreruperi-deer/).
+No account or password is needed. It reads the public data displayed on the [DEER outages page](https://www.distributie-energie.ro/intreruperi-deer/).
 
 **Counties:** Alba, Bihor, Bistrița-Năsăud, Brăila, Brașov, Buzău, Cluj, Covasna, Dâmbovița, Galați, Harghita, Maramureș, Mureș, Prahova, Sălaj, Satu Mare, Sibiu, Vrancea.
 
@@ -144,58 +144,52 @@ No account or password needed. It reads the public data shown on the [DEER outag
 
 **With HACS (recommended)**
 
-1. HACS → the three dots in the top right → **Custom repositories**.
+1. HACS → top right three dots → **Custom repositories**.
 2. Repository: `https://github.com/poemihai/deer-outages`, type: **Integration**.
-3. Find the „DEER” integration, **Download**, then restart Home Assistant.
+3. Find the "DEER" integration, **Download**, then restart Home Assistant.
 
-**Manually:** copy the `custom_components/deer_outages` folder into `config/custom_components/` of Home Assistant and restart.
+**Manually:** copy the `custom_components/deer_outages` folder to the Home Assistant `config/custom_components/` folder, and restart.
 
 ### Configuration
 
-**Settings → Devices & services → Add integration → DEER**
+**Settings → Devices & Services → Add Integration → DEER power outages**
 
-- **County**, **locality**: the locality can be typed in Romanian or Hungarian (`Târgu Secuiesc` or `Kézdivásárhely`, `Sfântu Gheorghe` or `Sepsiszentgyörgy`). Accents and letter case do not matter.
-- **Streets** (optional): comma separated, for example `Gábor Áron, Ady Endre`. Leave empty to follow the whole locality.
+- **County**, **locality**: you can write the locality in Romanian or Hungarian (`Târgu Secuiesc` or `Kézdivásárhely`, `Sfântu Gheorghe` or `Sepsiszentgyörgy`). Diacritics and uppercase/lowercase letters do not matter.
+- **Streets** (optional): separated by commas, e.g. `Gábor Áron, Ady Endre`. If left empty, it monitors outages for the entire locality.
 
-You can add several addresses (for example your parents'). The whole address (county, locality, streets) can be changed later from the gear icon (**Reconfigure**).
+You can add multiple addresses (e.g. your parents'). The full address (county, locality, streets) can be modified later using the gear icon (**Reconfigure**).
 
-### What you get
+### What do you get?
 
 | Entity | What it shows |
 | --- | --- |
-| `binary_sensor.…_power_outage_now` | On while an outage is going on at your address (planned or incident). Switches exactly when it starts and ends. |
-| `sensor.…_next_power_outage` | The start of the next (or the current) outage. Attributes: `end`, `type`, `addresses`, `message` (ready text for notifications), `count`, `outages`. |
-| `sensor.…_current_outage_end` | The end of the current (or the next) outage. Attributes: `type`, `end_known`, `addresses`, `message`, `count`. |
-| `binary_sensor.…_whole_area_affected` | On when DEER only named a whole locality or zone for the current or next outage (it is not known whether your street is included). |
-| `calendar.…_power_outages` | All outages as events, with the affected addresses. |
+| `binary_sensor.…_power_outage_now` | On as long as there is an outage at your address (planned or unplanned). Switches exactly at the start and end of an outage. |
+| `sensor.…_next_power_outage` | The start of the next strictly future outage. Attributes: `end`, `start_utc`, `end_utc`, `end_known`, `type`, `addresses`, `message`, `count`, `outages`. |
+| `sensor.…_current_outage_end` | The end of the active incident or, if none, the end of the next outage. Attributes: `type`, `end_known`, `ongoing`, `reported_end`, `estimated_end`, `addresses`, `message`, `count`. |
+| `binary_sensor.…_area_affected` | On if DEER marked an entire area/locality for outage (it is not known if your street is included). |
+| `calendar.…_power_outages` | All outages as events, with affected addresses. |
 
-On a new outage, Home Assistant fires a `deer_outages_new_outage` event. Outages that were already announced are not re-announced on the first fetch or after a restart.
+On a new outage, Home Assistant sends a `deer_outages_new_outage` event; on a changed outage, it sends `deer_outages_updated`; and on a cancelled or disappeared outage, it sends `deer_outages_cancelled`. The first query and the restart save the initial state; already known outages are not reported again.
 
 **Good to know:**
 
-- When DEER announces an outage for a whole village or zone (e.g. `ZONA PT 7`), it cannot be known whether your street is included. These are always shown, with `area_only: true`.
-- You can configure either the commune or the village: outages written as „Commune, Village, Street” are found in both cases.
-- Incidents often have no end time yet. Until one is given, 2 hours are assumed; while the incident stays in the feed, the sensors show it as ongoing.
-- Refreshes every 30 minutes. If the DEER page is unreachable, the last good data is kept for up to 3 hours (`stale: true`).
+- If DEER reports an outage for an entire locality (e.g. `ZONA PT 7`), it is not known if your street is included. These are always displayed for safety, with `area_only: true`.
+- You can set the locality as a commune or village: outages reported in the format "Commune, Village, Street" will be found in both cases.
+- Incidents often do not have an end time yet. In this case, a duration of 2 hours is assumed, until DEER provides the information; as long as the incident is present in the feed, the sensors will show it as ongoing.
+- Updates every 30 minutes. If the DEER page is not reachable, it will show the last good data for up to 3 hours (`stale: true`).
 
 ### Notification example
 
 ```yaml
-alias: Power outage notification
+alias: Power outage notifier
 triggers:
   - trigger: event
     event_type: deer_outages_new_outage
 actions:
-  - action: notify.mobile_app_my_phone
+  - action: notify.mobile_app_telefonom
     data:
-      title: ⚡ Power outage
+      title: ⚡ Power Outage
       message: "{{ trigger.event.data.message }}"
 ```
 
-Event data: `message`, `type` (`planned` / `incident`), `start`, `end`, `start_utc`, `end_utc`, `end_known`, `addresses`, `area_only`, `county`, `locality`, `streets`. `start`/`end` are in Romanian time, `start_utc`/`end_utc` in UTC.
-
----
-
-*Ez egy nem hivatalos, közösségi projekt, nincs kapcsolatban a Distribuție Energie Electrică Romania-val. / Proiect neoficial, neafiliat cu Distribuție Energie Electrică Romania. / Unofficial project, not affiliated with Distribuție Energie Electrică Romania.*
-
-*A kód nagy részét Claude (Anthropic) segítségével írtuk. / Developed with the help of Claude (Anthropic).*
+Event data: `message`, `type` (`planned` / `incident`), `start`, `end`, `start_utc`, `end_utc`, `end_known`, `addresses`, `area_only`, `match_confidence` (`exact_street` / `whole_area` / `locality`), `previous` (for updated/cancelled events), `county`, `locality`, `streets`. `start`/`end` are in Romanian time, and `start_utc`/`end_utc` are in UTC.

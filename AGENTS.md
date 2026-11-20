@@ -42,8 +42,8 @@ polling 30 min) → outages.py (parsing + filtrare pe adresă) → entități
 
 - `binary_sensor` — „întrerupere acum", `device_class=problem`, atribute `outages`, `message`
 - `binary_sensor` — „zonă afectată" (`area_only`): pornit când DEER anunță doar o localitate/zonă întreagă
-- `sensor` — „următoarea întrerupere", atribute `end`, `type`, `addresses`, `message`, `count`, `outages`
-- `sensor` — „sfârșitul întreruperii curente", atribute `type`, `end_known`, `ongoing`, `reported_end`, `estimated_end`, `addresses`, `message`, `count`
+- `sensor` — „următoarea întrerupere" strict viitoare (`start > now`), atribute `start_utc`, `end_utc`, `end`, `type`, `addresses`, `message`, `count`, `outages`
+- `sensor` — „sfârșitul întreruperii curente": preferă un incident activ; altfel folosește prima întrerupere curentă sau viitoare, cu atributele `type`, `end_known`, `ongoing`, `reported_end`, `estimated_end`, `addresses`, `message`, `count`
 - `calendar` — evenimente de întrerupere
 - Evenimente HA `deer_outages_new_outage`, `deer_outages_updated` și `deer_outages_cancelled`; `as_dict()` conține `start_utc`/`end_utc` și `match_confidence`
 
