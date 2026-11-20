@@ -36,29 +36,43 @@ class DeerOutageEndSensor(DeerEntity, SensorEntity):
 
     @property
     def native_value(self) -> datetime | None:
-        """Return the end from the active or next outage."""
+        """Return the effective end from the active or next outage."""
         now = dt_util.now()
         current = self.coordinator.current(now)
         upcoming = self.coordinator.upcoming(now)
-        first = current[0] if current else (upcoming[0] if upcoming else None)
-        return first.outage.end if first else None
+        incidents = [match for match in current if match.outage.kind == "incident"]
+        first = (
+            incidents[0]
+            if incidents
+            else (current[0] if current else (upcoming[0] if upcoming else None))
+        )
+        return self.coordinator.effective_end(first.outage, now) if first else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return the details of the current or next outage."""
+        """Return details of the current or next outage."""
         now = dt_util.now()
         current = self.coordinator.current(now)
         upcoming = self.coordinator.upcoming(now)
-        first = current[0] if current else (upcoming[0] if upcoming else None)
+        incidents = [match for match in current if match.outage.kind == "incident"]
+        first = (
+            incidents[0]
+            if incidents
+            else (current[0] if current else (upcoming[0] if upcoming else None))
+        )
         attributes: dict[str, Any] = {
             "count": len(current if current else upcoming),
             **self._common_attributes,
         }
         if first:
+            estimated_end = self.coordinator.effective_end(first.outage, now)
             attributes.update(
                 {
                     "type": first.outage.kind,
                     "end_known": first.outage.end_known,
+                    "ongoing": first.outage.kind == "incident" and not first.outage.end_known,
+                    "reported_end": first.outage.end.isoformat(),
+                    "estimated_end": estimated_end.isoformat(),
                     "addresses": [place.text for place in first.places],
                     "message": outage_text(first, self.hass.config.language),
                 }
@@ -98,6 +112,9 @@ class DeerNextOutageSensor(DeerEntity, SensorEntity):
             attributes.update(
                 {
                     "end": first.outage.end.isoformat(),
+                    "start_utc": dt_util.as_utc(first.outage.start).isoformat(),
+                    "end_utc": dt_util.as_utc(first.outage.end).isoformat(),
+                    "end_known": first.outage.end_known,
                     "type": first.outage.kind,
                     "addresses": [place.text for place in first.places],
                     "message": outage_text(first, self.hass.config.language),

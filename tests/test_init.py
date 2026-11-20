@@ -17,7 +17,12 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import (
     AiohttpClientMocker,
 )
 
-from custom_components.deer_outages.const import EVENT_NEW_OUTAGE, SCAN_INTERVAL
+from custom_components.deer_outages.const import (
+    EVENT_CANCELLED_OUTAGE,
+    EVENT_NEW_OUTAGE,
+    EVENT_UPDATED_OUTAGE,
+    SCAN_INTERVAL,
+)
 from custom_components.deer_outages.diagnostics import (
     async_get_config_entry_diagnostics,
 )
@@ -51,19 +56,21 @@ async def test_entities(
     now_id = entity_id_by_key(hass, entry, "outage_now")
     next_id = entity_id_by_key(hass, entry, "next_outage")
     end_id = entity_id_by_key(hass, entry, "outage_end")
-    area_id = entity_id_by_key(hass, entry, "area_only")
-    cal_id = entity_id_by_key(hass, entry, "outages")
+    entity_id_by_key(hass, entry, "outages")
 
     state = hass.states.get(now_id)
+    assert state is not None
     assert state.state == "on"
     assert len(state.attributes["outages"]) == 2
     assert state.attributes["message"].startswith("Tervezett áramszünet 11.06. 10:00–14:00")
 
     state = hass.states.get(next_id)
+    assert state is not None
     assert dt_util.parse_datetime(state.state) == _at("2026-11-12 08:00")
     assert state.attributes["count"] == 1
 
     state = hass.states.get(end_id)
+    assert state is not None
     # The assumed end is kept as 2 hours, marked end_known false.
     assert dt_util.parse_datetime(state.state) == _at("2026-11-06 13:30")
     assert state.attributes["end_known"] is False
@@ -142,8 +149,10 @@ async def test_stale_after_feed_goes_down(
     freezer.move_to(_at("2026-11-06 12:00"))
     await _setup(hass, entry)
     now_id = entity_id_by_key(hass, entry, "outage_now")
-    assert hass.states.get(now_id).state == "on"
-    assert hass.states.get(now_id).attributes["stale"] is False
+    now_state = hass.states.get(now_id)
+    assert now_state is not None
+    assert now_state.state == "on"
+    assert now_state.attributes["stale"] is False
 
     aioclient_mock.clear_requests()
     aioclient_mock.get(SCHEDULED_URL, status=500)
@@ -152,6 +161,7 @@ async def test_stale_after_feed_goes_down(
     await entry.runtime_data.async_refresh()
     await hass.async_block_till_done()
     state = hass.states.get(now_id)
+    assert state is not None
     assert state.state == "on"
     assert state.attributes["stale"] is True
 
@@ -159,7 +169,9 @@ async def test_stale_after_feed_goes_down(
     freezer.move_to(_at("2026-11-06 15:30:01"))
     await entry.runtime_data.async_refresh()
     await hass.async_block_till_done()
-    assert hass.states.get(now_id).state == "unavailable"
+    state = hass.states.get(now_id)
+    assert state is not None
+    assert state.state == "unavailable"
 
 
 async def test_boundary_switch(
@@ -174,12 +186,16 @@ async def test_boundary_switch(
     freezer.move_to(_at("2026-11-12 07:59"))
     await _setup(hass, entry)
     now_id = entity_id_by_key(hass, entry, "outage_now")
-    assert hass.states.get(now_id).state == "off"
+    state = hass.states.get(now_id)
+    assert state is not None
+    assert state.state == "off"
 
     freezer.move_to(_at("2026-11-12 08:00"))
     async_fire_time_changed(hass)
     await hass.async_block_till_done()
-    assert hass.states.get(now_id).state == "on"
+    state = hass.states.get(now_id)
+    assert state is not None
+    assert state.state == "on"
 
 
 async def test_incident_without_end_stays_on(
@@ -194,13 +210,17 @@ async def test_incident_without_end_stays_on(
     freezer.move_to(_at("2026-11-06 12:00"))
     await _setup(hass, entry)
     now_id = entity_id_by_key(hass, entry, "outage_now")
-    assert hass.states.get(now_id).state == "on"
+    state = hass.states.get(now_id)
+    assert state is not None
+    assert state.state == "on"
 
     # Two hours after the start the incident still has no end in the feed.
     freezer.move_to(_at("2026-11-06 14:00:01"))
     await entry.runtime_data.async_refresh()
     await hass.async_block_till_done()
-    assert hass.states.get(now_id).state == "on"
+    state = hass.states.get(now_id)
+    assert state is not None
+    assert state.state == "on"
 
     # Once the feed no longer lists it, the sensor turns off.
     aioclient_mock.clear_requests()
@@ -209,7 +229,9 @@ async def test_incident_without_end_stays_on(
     freezer.move_to(_at("2026-11-06 14:45"))
     await entry.runtime_data.async_refresh()
     await hass.async_block_till_done()
-    assert hass.states.get(now_id).state == "off"
+    state = hass.states.get(now_id)
+    assert state is not None
+    assert state.state == "off"
 
 
 async def test_diagnostics(
@@ -277,7 +299,36 @@ async def test_current_incident_end_before_future_outage(
     assert dt_util.parse_datetime(next_state.state) == _at("2026-11-23 10:00")
     assert next_state.attributes["count"] == 1
 
-    if False:
-        # TODO: reenable when future outages are handled
-        assert next_state.attributes["start_utc"] == "2026-11-23T10:00:00+00:00"
-        assert next_state.attributes["end_utc"] == "2026-11-23T14:00:00+00:00"
+    assert next_state.attributes["start_utc"] == "2026-11-23T08:00:00+00:00"
+    assert next_state.attributes["end_utc"] == "2026-11-23T12:00:00+00:00"
+
+
+async def test_outage_lifecycle_events(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    entry: MockConfigEntry,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Changed and removed outages fire update and cancellation events."""
+    freezer.move_to(_at("2026-11-05 12:00"))
+    scheduled = load("scheduled.json")
+    aioclient_mock.get(SCHEDULED_URL, json=scheduled)
+    aioclient_mock.get(INCIDENTS_URL, json=load("incidents.json"))
+    await _setup(hass, entry)
+
+    updated_events = async_capture_events(hass, EVENT_UPDATED_OUTAGE)
+    cancelled_events = async_capture_events(hass, EVENT_CANCELLED_OUTAGE)
+    changed = [dict(record) for record in scheduled]
+    for record in changed:
+        if str(record.get("id")) == "50001":
+            record["dataProgramareStop"] = "06/11/2026 15:00"
+
+    aioclient_mock.clear_requests()
+    aioclient_mock.get(SCHEDULED_URL, json=changed)
+    aioclient_mock.get(INCIDENTS_URL, json=[])
+    freezer.tick(SCAN_INTERVAL)
+    await entry.runtime_data.async_refresh()
+    await hass.async_block_till_done()
+
+    assert any(event.data["id"] == "50001" for event in updated_events)
+    assert any(event.data["id"] == "70001" for event in cancelled_events)

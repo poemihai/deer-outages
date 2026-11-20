@@ -23,20 +23,33 @@ _RETRIES = 2
 
 
 class FeedResult:
-    """The two feed lists and whether any of them had to fall back to cache."""
+    """The two feed lists and whether each list came from cache."""
 
-    __slots__ = ("degraded", "incidents", "scheduled")
+    __slots__ = (
+        "degraded",
+        "incidents",
+        "incidents_from_cache",
+        "last_fetch",
+        "scheduled",
+        "scheduled_from_cache",
+    )
 
     def __init__(
         self,
         scheduled: list[dict[str, Any]] | None,
         incidents: list[dict[str, Any]] | None,
         degraded: bool,
+        scheduled_from_cache: bool = False,
+        incidents_from_cache: bool = False,
+        last_fetch: datetime | None = None,
     ) -> None:
         """Initialize the result."""
         self.scheduled = scheduled
         self.incidents = incidents
         self.degraded = degraded
+        self.scheduled_from_cache = scheduled_from_cache
+        self.incidents_from_cache = incidents_from_cache
+        self.last_fetch = last_fetch
 
 
 class FeedCache:
@@ -47,7 +60,15 @@ class FeedCache:
         self._hass = hass
         self._lock = asyncio.Lock()
         self._data: dict[
-            str, tuple[list[dict[str, Any]], list[dict[str, Any]], datetime, bool]
+            str,
+            tuple[
+                list[dict[str, Any]] | None,
+                list[dict[str, Any]] | None,
+                datetime,
+                bool,
+                bool,
+                bool,
+            ],
         ] = {}
 
     async def async_get(self, region: str) -> FeedResult:
@@ -60,7 +81,14 @@ class FeedCache:
         async with self._lock:
             cached = self._data.get(region)
             if cached is not None and dt_util.utcnow() - cached[2] < SCAN_INTERVAL:
-                return FeedResult(cached[0], cached[1], cached[3])
+                return FeedResult(
+                    cached[0],
+                    cached[1],
+                    cached[3],
+                    cached[4],
+                    cached[5],
+                    cached[2],
+                )
 
             api = await async_create_api(self._hass)
             scheduled, incidents = await asyncio.gather(
@@ -69,15 +97,32 @@ class FeedCache:
             )
 
             old_scheduled, old_incidents = cached[:2] if cached else (None, None)
+            scheduled_from_cache = scheduled is None and old_scheduled is not None
+            incidents_from_cache = incidents is None and old_incidents is not None
             scheduled = scheduled if scheduled is not None else old_scheduled
             incidents = incidents if incidents is not None else old_incidents
 
             if scheduled is None and incidents is None:
                 raise DeerApiError(f"Region {region}: both endpoints failed and nothing is cached")
 
-            degraded = scheduled is old_scheduled or incidents is old_incidents
-            self._data[region] = (scheduled, incidents, dt_util.utcnow(), degraded)
-            return FeedResult(scheduled, incidents, degraded)
+            degraded = scheduled_from_cache or incidents_from_cache
+            fetched_at = dt_util.utcnow()
+            self._data[region] = (
+                scheduled,
+                incidents,
+                fetched_at,
+                degraded,
+                scheduled_from_cache,
+                incidents_from_cache,
+            )
+            return FeedResult(
+                scheduled,
+                incidents,
+                degraded,
+                scheduled_from_cache,
+                incidents_from_cache,
+                fetched_at,
+            )
 
     async def _async_fetch(
         self, api: DeerApi, region: str, kind: str

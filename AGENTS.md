@@ -30,7 +30,7 @@ polling 30 min) → outages.py (parsing + filtrare pe adresă) → entități
 | `outages.py` | **Logică pură, fără obiecte Home Assistant** — de testat izolat: normalizare text (fără diacritice), aliasuri localități RO↔HU, parsing `Planned`/`Incident`, select pe stradă/localitate |
 | `coordinator.py` | `DataUpdateCoordinator`: polling, detectare întreruperi noi, eveniment, storage, timer la limitele întreruperii |
 | `config_flow.py` | UI configurare: județ (dropdown), localitate, străzi (opțional) + options flow (străzi) + `async_step_reconfigure` (întreaga adresă) |
-| `diagnostics.py` | Download-diagnostics: intrare, regiune, stare feed, întreruperi, `seen_count` |
+| `diagnostics.py` | Download-diagnostics: intrare, regiune, stare feed, timestamp-ul ultimei citiri, sursa cache per endpoint, întreruperi, `seen_count` |
 | `entity.py` | Clasa de bază pentru entități (device info, atribute comune) |
 | `binary_sensor.py` | „Întrerupere acum" (`problem`) + „zonă afectată fără stradă" (`area_only`) |
 | `sensor.py` | „Următoarea întrerupere" + „sfârșitul întreruperii curente" (timestamp) |
@@ -43,9 +43,9 @@ polling 30 min) → outages.py (parsing + filtrare pe adresă) → entități
 - `binary_sensor` — „întrerupere acum", `device_class=problem`, atribute `outages`, `message`
 - `binary_sensor` — „zonă afectată" (`area_only`): pornit când DEER anunță doar o localitate/zonă întreagă
 - `sensor` — „următoarea întrerupere", atribute `end`, `type`, `addresses`, `message`, `count`, `outages`
-- `sensor` — „sfârșitul întreruperii curente", atribute `type`, `end_known`, `addresses`, `message`, `count`
+- `sensor` — „sfârșitul întreruperii curente", atribute `type`, `end_known`, `ongoing`, `reported_end`, `estimated_end`, `addresses`, `message`, `count`
 - `calendar` — evenimente de întrerupere
-- Eveniment HA `deer_outages_new_outage` pentru automatizări/notificări; `as_dict()` conține `start_utc`/`end_utc`
+- Evenimente HA `deer_outages_new_outage`, `deer_outages_updated` și `deer_outages_cancelled`; `as_dict()` conține `start_utc`/`end_utc` și `match_confidence`
 
 ## Reguli de comportament importante
 
@@ -61,7 +61,8 @@ polling 30 min) → outages.py (parsing + filtrare pe adresă) → entități
 - **Orele din feed** sunt locale România fără offset → `FEED_TIME_ZONE = Europe/Bucharest`.
 - **Diacriticele nu contează** la potrivire; localitățile se pot scrie RO sau HU.
 - Localitatea configurată poate fi **comuna sau satul**: liniile `COMUNA, SAT, Strada`
-  din feed se potrivesc cu ambele (`_split_planned`).
+  din feed se păstrează separat în `Place.localities` și se potrivesc cu ambele (`_split_planned`).
+- Numele de străzi cu mai multe cuvinte se păstrează separat în `Place.streets`, evitând potriviri ambigue.
 - Polling la 30 min (`SCAN_INTERVAL`); entitățile se reîmprospătează exact la
   începutul/sfârșitul unei întreruperi prin timer programat (`_schedule_boundary`).
 - Un `async_unload_entry` oprește și timerul de graniță (`async_shutdown`).

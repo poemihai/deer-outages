@@ -124,8 +124,8 @@ def test_parse_incidents() -> None:
     assert not incident.end_known
     assert incident.end - incident.start == timedelta(hours=2)
     assert [(p.locality, p.detail) for p in incident.places] == [
-        ("TARGU SECUIESC TARGU SECUIESC", "Strada GABOR ARON"),
-        ("TARGU SECUIESC TARGU SECUIESC", "Strada KOSSUTH LAJOS"),
+        ("TARGU SECUIESC", "Strada GABOR ARON"),
+        ("TARGU SECUIESC", "Strada KOSSUTH LAJOS"),
     ]
 
 
@@ -166,12 +166,34 @@ def test_select_other_county() -> None:
 def test_village_names() -> None:
     """A village is found in the middle of the address, a street name is not a town."""
     records = [
-        {"id": "1", "judet": "Buzau", "ansambluFunctional": "POGOANELE, VALEA SALCIILOR, Strada  PRINCIPALA",
-         "dataProgramareStart": "07/11/2026 09:00", "dataProgramareStop": "07/11/2026 12:00"},
-        {"id": "2", "judet": "Buzau", "ansambluFunctional": "BUZAU, Strada  VALEA SALCIILOR",
-         "dataProgramareStart": "07/11/2026 09:00", "dataProgramareStop": "07/11/2026 12:00"},
+        {
+            "id": "1",
+            "judet": "Buzau",
+            "ansambluFunctional": "POGOANELE, VALEA SALCIILOR, Strada  PRINCIPALA",
+            "dataProgramareStart": "07/11/2026 09:00",
+            "dataProgramareStop": "07/11/2026 12:00",
+        },
+        {
+            "id": "2",
+            "judet": "Buzau",
+            "ansambluFunctional": "BUZAU, Strada  VALEA SALCIILOR",
+            "dataProgramareStart": "07/11/2026 09:00",
+            "dataProgramareStop": "07/11/2026 12:00",
+        },
     ]
     outages = parse_planned(records, TZ)
     assert [o.work_id for o, _ in select(outages, "Buzau", "Valea Sălciilor", [])] == ["1"]
     assert [o.work_id for o, _ in select(outages, "Buzau", "Pogoanele", [])] == ["1"]
     assert [o.work_id for o, _ in select(outages, "Buzau", "Pogoanele", ["Principala"])] == ["1"]
+
+    valea = outages[0].places[0]
+    assert valea.localities == ["POGOANELE", "VALEA SALCIILOR"]
+
+
+def test_parse_planned_multi_word_street() -> None:
+    """A full street name such as Carol Davila is kept and matched safely."""
+    outage = _planned("BUZAU, Strada  CAROL DAVILA")
+    place = outage.places[0]
+    assert place.streets == ["Strada  CAROL DAVILA"]
+    assert place.detail == "Strada  CAROL DAVILA"
+    assert select([outage], "Alba", "Buzau", ["Carol Davila"])

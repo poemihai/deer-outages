@@ -25,6 +25,8 @@ CONF_LOCALITY: Final = "locality"
 CONF_STREETS: Final = "streets"
 
 EVENT_NEW_OUTAGE: Final = "deer_outages_new_outage"
+EVENT_UPDATED_OUTAGE: Final = "deer_outages_updated"
+EVENT_CANCELLED_OUTAGE: Final = "deer_outages_cancelled"
 
 STORAGE_VERSION: Final = 1
 SEEN_RETENTION_DAYS: Final = 30

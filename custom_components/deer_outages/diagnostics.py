@@ -24,5 +24,10 @@ async def async_get_config_entry_diagnostics(
         "stale": coordinator.stale,
         "has_usable_data": coordinator.has_usable_data,
         "seen_count": coordinator.seen_count,
+        "last_feed_fetch": (
+            coordinator._last_feed_fetch.isoformat() if coordinator._last_feed_fetch else None
+        ),
+        "scheduled_from_cache": coordinator._scheduled_from_cache,
+        "incidents_from_cache": coordinator._incidents_from_cache,
         "outages": [match.as_dict() for match in coordinator.data or []],
     }

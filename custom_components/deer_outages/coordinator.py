@@ -6,6 +6,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
@@ -21,7 +22,9 @@ from .const import (
     CONF_STREETS,
     COUNTIES,
     DOMAIN,
+    EVENT_CANCELLED_OUTAGE,
     EVENT_NEW_OUTAGE,
+    EVENT_UPDATED_OUTAGE,
     FEED_TIME_ZONE,
     INCIDENT_DEFAULT_DURATION,
     INCIDENT_ONGOING_EXTENSION,
@@ -59,6 +62,15 @@ class Match:
         """Return if only whole-locality or zone lines matched, no named street."""
         return all(place.is_area for place in self.places)
 
+    @property
+    def match_confidence(self) -> str:
+        """Return whether streets, a whole locality, or only a zone matched."""
+        if self.area_only:
+            return "whole_area"
+        if any(not place.is_area and place.detail for place in self.places):
+            return "exact_street"
+        return "locality"
+
     def as_dict(self) -> dict[str, Any]:
         """Return a compact, JSON friendly description."""
         outage = self.outage
@@ -73,10 +85,11 @@ class Match:
             "duration": outage.duration,
             "addresses": [place.text for place in self.places],
             "area_only": self.area_only,
+            "match_confidence": self.match_confidence,
         }
 
 
-def seen_store(hass: HomeAssistant, entry_id: str) -> Store[dict[str, dict[str, str]]]:
+def seen_store(hass: HomeAssistant, entry_id: str) -> Store[dict[str, Any]]:
     """Return the storage that remembers outages already announced."""
     return Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry_id}")
 
@@ -102,11 +115,15 @@ class DeerCoordinator(DataUpdateCoordinator[list[Match]]):
         self.streets: list[str] = split_streets(
             entry.options.get(CONF_STREETS, entry.data.get(CONF_STREETS, ""))
         )
-        self._tz = dt_util.get_time_zone(FEED_TIME_ZONE)
+        self._tz: ZoneInfo = ZoneInfo(FEED_TIME_ZONE)
         self._store = seen_store(hass, entry.entry_id)
         # Outage key to the date it was last in the feed. None until a baseline exists.
         self._seen: dict[str, str] | None = None
         self._last_good_update: datetime | None = None
+        self._last_feed_fetch: datetime | None = None
+        self._scheduled_from_cache = False
+        self._incidents_from_cache = False
+        self._previous_outages: dict[str, dict[str, Any]] | None = None
         self._degraded = False
         self._unsub_boundary: CALLBACK_TYPE | None = None
 
@@ -160,6 +177,8 @@ class DeerCoordinator(DataUpdateCoordinator[list[Match]]):
         stored = await self._store.async_load()
         if stored is not None:
             self._seen = stored.get("seen", {})
+            outages = stored.get("outages")
+            self._previous_outages = outages if isinstance(outages, dict) else None
 
     async def _async_update_data(self) -> list[Match]:
         try:
@@ -178,6 +197,9 @@ class DeerCoordinator(DataUpdateCoordinator[list[Match]]):
 
         if not feed_result.degraded:
             self._last_good_update = dt_util.utcnow()
+        self._last_feed_fetch = feed_result.last_fetch
+        self._scheduled_from_cache = feed_result.scheduled_from_cache
+        self._incidents_from_cache = feed_result.incidents_from_cache
         self._degraded = feed_result.degraded
 
         outages = parse_planned(scheduled, self._tz) + parse_incidents(
@@ -194,29 +216,49 @@ class DeerCoordinator(DataUpdateCoordinator[list[Match]]):
         return matches
 
     async def _async_announce_new(self, matches: list[Match]) -> None:
+        """Persist the baseline and report new, changed, or cancelled outages."""
         today = dt_util.now().date().isoformat()
         oldest = (dt_util.now() - timedelta(days=SEEN_RETENTION_DAYS)).date().isoformat()
-        previous = self._seen
-        seen = {key: day for key, day in (previous or {}).items() if day >= oldest}
+        previous_seen = self._seen
+        seen = {key: day for key, day in (previous_seen or {}).items() if day >= oldest}
         seen.update({m.outage.key: today for m in matches})
+        snapshots = {m.outage.key: m.as_dict() for m in matches}
+
+        previous = self._previous_outages
+        # Baseline and reload both deliberately avoid re-announcing known outages.
+        if previous is not None:
+            for match in matches:
+                key = match.outage.key
+                event_data = {
+                    "county": self.county,
+                    "locality": self.locality,
+                    "streets": self.streets,
+                    "message": outage_text(match, self.hass.config.language),
+                    **match.as_dict(),
+                }
+                if key not in previous:
+                    if key not in (previous_seen or {}):
+                        self.hass.bus.async_fire(EVENT_NEW_OUTAGE, event_data)
+                elif previous[key] != snapshots[key]:
+                    event_data["previous"] = previous[key]
+                    self.hass.bus.async_fire(EVENT_UPDATED_OUTAGE, event_data)
+
+            for key, old in previous.items():
+                if key not in snapshots:
+                    self.hass.bus.async_fire(
+                        EVENT_CANCELLED_OUTAGE,
+                        {
+                            "county": self.county,
+                            "locality": self.locality,
+                            "streets": self.streets,
+                            "previous": old,
+                            **old,
+                        },
+                    )
+
         self._seen = seen
-        if seen != previous:
-            await self._store.async_save({"seen": seen})
-        # The first run only records a baseline, so nothing is announced.
-        if previous is None:
-            return
-        for match in matches:
-            if match.outage.key not in previous:
-                self.hass.bus.async_fire(
-                    EVENT_NEW_OUTAGE,
-                    {
-                        "county": self.county,
-                        "locality": self.locality,
-                        "streets": self.streets,
-                        "message": outage_text(match, self.hass.config.language),
-                        **match.as_dict(),
-                    },
-                )
+        self._previous_outages = snapshots
+        await self._store.async_save({"seen": seen, "outages": snapshots})
 
     @callback
     def _schedule_boundary(self, matches: list[Match]) -> None:
