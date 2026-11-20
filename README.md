@@ -70,7 +70,7 @@ Az esemény adatai: `message`, `type` (`planned` / `incident`), `start`, `end`, 
 
 ## Română
 
-Întreruperile programate și incidentele **Distribuție Energie Electrică Romania (DEER)** în Home Assistant, **filtrate pentru adresa ta**: te anunță când mâine nu ai curent pe strada ta, arată întreruperile în calendar și comută exact la începutul și la sfârșitul unei întreruperi.
+Întreruperile programate și incidentele **Distribuție Energie Electrică Romania (DEER)** în Home Assistant, **filtrate pentru adresa ta**: te anunță când nu ai curent pe strada ta, arată întreruperile în calendar exact la începutul și la sfârșitul unei întreruperi.
 
 Nu e nevoie de cont sau parolă. Citește datele publice afișate pe [pagina de întreruperi DEER](https://www.distributie-energie.ro/intreruperi-deer/).
 
