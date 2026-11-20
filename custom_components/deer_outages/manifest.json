@@ -1,13 +1,13 @@
 {
   "domain": "deer_outages",
-  "name": "DEER áramszünetek",
+  "name": "DEER power outages",
   "codeowners": [
-    "@lehel67"
+    "@poemihai"
   ],
   "config_flow": true,
-  "documentation": "https://github.com/lehel67/ha-deer-outages",
+  "documentation": "https://github.com/poemihai/deer-outages",
   "integration_type": "service",
   "iot_class": "cloud_polling",
-  "version": "0.1.1",
-  "issue_tracker": "https://github.com/lehel67/ha-deer-outages/issues"
+  "version": "0.1.2",
+  "issue_tracker": "https://github.com/poemihai/deer-outages/issues"
 }

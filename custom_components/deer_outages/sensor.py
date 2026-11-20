@@ -80,21 +80,21 @@ class DeerNextOutageSensor(DeerEntity, SensorEntity):
 
     @property
     def native_value(self) -> datetime | None:
-        """Return the start of the first outage that is not over."""
-        upcoming = self.coordinator.upcoming()
-        return upcoming[0].outage.start if upcoming else None
+        """Return the start of the first future outage."""
+        future = self.coordinator.future()
+        return future[0].outage.start if future else None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Return the details of the next outage and the full list."""
-        upcoming = self.coordinator.upcoming()
+        """Return the details of the next future outage and the full future list."""
+        future = self.coordinator.future()
         attributes: dict[str, Any] = {
-            "count": len(upcoming),
-            "outages": [match.as_dict() for match in upcoming],
+            "count": len(future),
+            "outages": [match.as_dict() for match in future],
             **self._common_attributes,
         }
-        if upcoming:
-            first = upcoming[0]
+        if future:
+            first = future[0]
             attributes.update(
                 {
                     "end": first.outage.end.isoformat(),

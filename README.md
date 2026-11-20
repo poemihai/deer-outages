@@ -1,4 +1,4 @@
-# DEER áramszünetek – Home Assistant
+# DEER power outages – Home Assistant
 
 [Magyar](#magyar) | [Română](#română) | [English](#english)
 
@@ -24,7 +24,7 @@ Nem kell hozzá se fiók, se jelszó. A DEER nyilvános adatait olvassa, ugyanaz
 
 ### Beállítás
 
-**Beállítások → Eszközök és szolgáltatások → Integráció hozzáadása → DEER áramszünetek**
+**Beállítások → Eszközök és szolgáltatások → Integráció hozzáadása → DEER power outages**
 
 - **Megye**, **település**: a települést írhatod románul vagy magyarul is (`Târgu Secuiesc` vagy `Kézdivásárhely`, `Sfântu Gheorghe` vagy `Sepsiszentgyörgy`). Az ékezet és a kis- és nagybetű nem számít.
 - **Utcák** (nem kötelező): vesszővel elválasztva, például `Gábor Áron, Ady Endre`. Üresen hagyva az egész település leállásait figyeli.

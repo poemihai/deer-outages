@@ -151,6 +151,11 @@ class DeerCoordinator(DataUpdateCoordinator[list[Match]]):
         now = now or dt_util.now()
         return [m for m in self.data or [] if self.effective_end(m.outage, now) > now]
 
+    def future(self, now: datetime | None = None) -> list[Match]:
+        """Return outages whose start is strictly in the future."""
+        now = now or dt_util.now()
+        return [m for m in self.upcoming(now) if m.outage.start > now]
+
     async def _async_setup(self) -> None:
         stored = await self._store.async_load()
         if stored is not None:
